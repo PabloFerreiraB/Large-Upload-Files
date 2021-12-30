@@ -10,17 +10,17 @@ import { MyServiceService } from '../my-service.service';
 export class FileUploadComponent {
   constructor(private _myServiceService: MyServiceService) {}
 
-  largeFileUpload(event: any) {
-    let fileList: FileList = event?.target?.files;
+  upload(event: any) {
+    const fileList: FileList = event?.target?.files;
 
     if (fileList.length != 0) {
       this._myServiceService
         .fileUpload(fileList[0], fileList[0].name)
-        .then((addFileToFolder) => {
-          console.log('Large File Uploaded Successfully');
+        .then((res) => {
+          console.log('Arquivo carregado com sucesso', res);
         })
         .catch((error) => {
-          console.log('Error while uploading' + error);
+          console.log('Erro ao enviar' + error);
         });
     }
   }

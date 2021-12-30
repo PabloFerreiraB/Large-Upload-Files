@@ -11,128 +11,89 @@ export class MyServiceService {
 
   public fileUpload(file: any, fileName: string) {
     return new Promise((resolve, reject) => {
-      // Criando um arquivo fake
-      this.createDummyFile().then((result: any) => {
-        let fileReader = new FileReader();
-        let offset = 0;
+      let fileReader = new FileReader();
+      let offset = 0; // Tamanho total do arquivo em bytes ...
+      let total = file.size;
+      // Pedaços de 1 MB representados em bytes
+      // Se o arquivo tiver menos de 1 MB, separe-o em dois pedaços de 80% e 20% do tamanho
+      let length = 1000000 > total ? Math.round(total * 0.8) : 1000000;
+      let chunks: { offset: number; length: number; method: any }[] = [];
 
-        // Tamanho total do arquivo em bytes ...
-        let total = file.size;
-
-        // Pedaços de 1 MB representados em bytes (se o arquivo tiver menos de 1 MB, separe-o em dois pedaços de 80% e 20% do tamanho)...
-        let length = 1000000 > total ? Math.round(total * 0.8) : 1000000;
-        let chunks: { offset: number; length: number; method: any }[] = [];
-
-        // Lê o arquivo usando a API fileReader HTML5 (como um ArrayBuffer)
-        fileReader.readAsArrayBuffer(file);
-
-        fileReader.onload = (event: any) => {
-          while (offset < total) {
-            // Identificando se estamos lidando com a parte final do arquivo
-            if (offset + length > total) {
-              length = total - offset;
-            }
-
-            // Cria os pedaços que precisam ser processados e o método REST associado (iniciar, continuar ou terminar)
-            chunks.push({
-              offset,
-              length,
-              method: this.getUploadMethod(offset, length, total),
-            });
-            offset += length;
+      fileReader.readAsArrayBuffer(file); // Lê o arquivo usando a API fileReader HTML5 (como um ArrayBuffer)
+      fileReader.onload = (event: any) => {
+        while (offset < total) {
+          // Identificando se estamos lidando com a parte final do arquivo
+          if (offset + length > total) {
+            length = total - offset;
           }
 
-          // Cada pedaço vale uma porcentagem do tamanho total do arquivo
-          const chunkPercentage = (total / chunks.length / total) * 100;
-          console.log('Chunk Percentage: ' + chunkPercentage);
+          // Cria os pedaços que precisam ser processados e associa o método (O método foi apenas para eu ver xD)
+          // startUpload, continueUpload ou finishUpload
+          chunks.push({
+            offset,
+            length,
+            method: this.getUploadMethod(offset, length, total),
+          });
 
-          if (chunks.length > 0) {
-            // O identificador guid único para ser usado durante a sessão de upload
-            const id = this.generateGUID();
+          offset += length;
+        }
 
-            // Inicie o upload
-            this.uploadFile(
-              event.target.result,
-              id,
-              fileName,
-              chunks,
-              0,
-              0,
-              chunkPercentage,
-              resolve,
-              reject
-            );
-          }
-        };
-      });
-    });
-  }
+        // Cada pedaço vale uma porcentagem do tamanho total do arquivo
+        const chunkPercentage = (total / chunks.length / total) * 100;
+        console.log('Porcentagem de pedaços: ' + chunkPercentage);
 
-  createDummyFile() {
-    return new Promise((resolve, reject) => {
-      var endpoint = 'https://httpbin.org/post';
+        if (chunks.length > 0) {
+          // O identificador guid único para ser usado no Payload
+          const idGUID = this.generateGUID();
 
-      const headers = {
-        accept: 'application/json;odata=verbose',
+          // Inicie o upload
+          this.uploadFile(
+            event.target.result,
+            idGUID,
+            fileName,
+            chunks,
+            0, // index
+            0, // byteOffset
+            chunkPercentage,
+            resolve,
+            reject
+          );
+        }
       };
-
-      this.executePost(endpoint, this.convertDataBinaryString(2), headers)
-        .then((file) => resolve(true))
-        .catch((err) => reject(err));
     });
   }
 
   async executePost(url: string, data: any, requestHeaders: any) {
-    const res = await this.http
+    return this.http
       .post(url, data, requestHeaders)
       .toPromise()
       .catch((err: HttpErrorResponse) => {
         return err.error;
       });
-    return this.parseRetSingle(res);
   }
 
-  // Base64 - este método converte o blob arrayBuffer em uma string binária para enviar a solicitação REST
+  // Base64 - Método converte o blob arrayBuffer em uma string binária para enviar
   convertDataBinaryString(data: any) {
     let fileData = '';
     let byteArray = new Uint8Array(data);
-    for (var i = 0; i < byteArray.byteLength; i++) {
+
+    for (let i = 0; i < byteArray.byteLength; i++) {
       fileData += String.fromCharCode(byteArray[i]);
     }
-    return fileData;
-  }
 
-  parseRetSingle(res: any) {
-    if (res) {
-      if (res.hasOwnProperty('d')) {
-        return res.d;
-      } else if (res.hasOwnProperty('error')) {
-        const obj: any = res.error;
-        obj.hasError = true;
-        return obj;
-      } else {
-        return {
-          hasError: true,
-          comments: res,
-        };
-      }
-    } else {
-      return {
-        hasError: true,
-        comments: 'Verifique a resposta no rastreamento da rede',
-      };
-    }
+    return fileData;
   }
 
   // Helper - Dependendo de qual bloco de dados estamos lidando, precisamos usar o método Rest correto
   getUploadMethod(offset: any, length: any, total: any) {
     if (offset + length + 1 > total) {
-      return 'finishupload';
+      return 'finishUpload';
     } else if (offset === 0) {
-      return 'startupload';
+      return 'startUpload';
     } else if (offset < total) {
-      return 'continueupload';
+      return 'continueUpload';
     }
+
     return null;
   }
 
@@ -161,8 +122,7 @@ export class MyServiceService {
   // Método principal que chama resursivamente para obter os pedaços e enviá-los
   uploadFile(
     result: any,
-    id: string,
-
+    idGUID: string,
     fileName: string,
     chunks: string | any[],
     index: number,
@@ -171,11 +131,15 @@ export class MyServiceService {
     resolve: { (value: unknown): void; (arg0: any): void },
     reject: { (reason?: any): void; (arg0: any): void }
   ) {
-    // Dividimos o blob do arquivo no pedaço que precisamos enviar nesta solicitação (byteOffset nos diz a posição inicial)
-    const data = this.convertFileToBlobChunks(result, chunks[index]);
+    console.log('CHUNKS: ', chunks[index]);
+
+    // Dividindo o blob do arquivo no pedaço que precisamos enviar nesta solicitação - ByteOffset diz a posição inicial
+    const data = this.splitFileToBlobChunks(result, chunks[index]);
+
+    // const results = new Blob(data as BlobPart[], { type: 'video/mp4' });
 
     // Faça upload do trecho para o servidor usando REST, usando o guid de upload exclusivo como o identificador
-    this.uploadFileChunk(id, fileName, chunks[index], data, byteOffset)
+    this.uploadFileChunk(idGUID, fileName, chunks[index], data, byteOffset)
       .then((value: any) => {
         const isFinished = index === chunks.length - 1;
         index += 1;
@@ -183,13 +147,13 @@ export class MyServiceService {
         const percentageComplete = isFinished
           ? 100
           : Math.round(index * chunkPercentage);
-        console.log('Percentage Completed:' + percentageComplete);
+        console.log('Porcentagem Concluída:' + percentageComplete);
 
         // Mais pedaços para processar antes que o arquivo seja concluído
         if (index < chunks.length) {
           this.uploadFile(
             result,
-            id,
+            idGUID,
             fileName,
             chunks,
             index,
@@ -209,7 +173,7 @@ export class MyServiceService {
   }
 
   // Método divide o buffer da matriz de blob no pedaço apropriado e, em seguida, chama para obter a BinaryString desse pedaço
-  convertFileToBlobChunks(
+  splitFileToBlobChunks(
     result: string | any[],
     chunkInfo: { offset: any; length: any }
   ) {
@@ -221,33 +185,15 @@ export class MyServiceService {
     id: string,
     fileName: string,
     chunk: { offset: string | number; method: string },
-    data: string | any[],
+    data: any,
     byteOffset: number
   ) {
     return new Promise((resolve, reject) => {
-      // let offset = chunk.offset === 0 ? '' : ',fileOffset=' + chunk.offset;
-      // console.log('OFFSET', offset);
-
-      // Parametrizar os componentes deste ponto de extremidade, para evitar o problema de comprimento máximo de url
       const endpoint = 'https://httpbin.org/post';
 
-      // const endpoint =
-      //   'https://httpbin.org/post' +
-      //   '/' +
-      //   fileName +
-      //   "')/" +
-      //   chunk.method +
-      //   "(uploadId=guid'" +
-      //   id +
-      //   "'" +
-      //   offset +
-      //   ')';
-
-      // https://httpbin.org/post/Test_ABC/na-daily.mp4')/startupload(uploadId=guid'5115f958-ef55-b33c-8534-d59b35dbc553')
-
       const headers = {
-        Accept: 'application/json; odata=verbose',
-        'Content-Type': 'application/octet-stream',
+        Accept: 'application/json',
+        'Content-Type': 'multipart/form-data',
       };
 
       this.executePost(endpoint, data, headers)

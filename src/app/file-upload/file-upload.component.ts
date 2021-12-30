@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, ElementRef, OnInit, ViewChild } from '@angular/core';
 
 import { MyServiceService } from '../my-service.service';
 
@@ -8,6 +8,8 @@ import { MyServiceService } from '../my-service.service';
   styleUrls: ['./file-upload.component.scss'],
 })
 export class FileUploadComponent implements OnInit {
+  @ViewChild('inputFile') inputFile: ElementRef | undefined;
+
   currentProgress: string = '0';
 
   constructor(private _myServiceService: MyServiceService) {}
@@ -25,11 +27,14 @@ export class FileUploadComponent implements OnInit {
   }
 
   upload(event: any) {
-    const fileList: FileList = event?.target?.files;
+    let fileList: FileList = event?.target?.files;
+
     if (fileList.length != 0) {
       this._myServiceService
         .fileUpload(fileList[0], fileList[0].name)
         .then((res) => {
+          this.inputFile!.nativeElement.value = '';
+
           alert(res);
         })
         .catch((error) => {

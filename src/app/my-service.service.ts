@@ -1,7 +1,14 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 
-import { BehaviorSubject, lastValueFrom } from 'rxjs';
+import {
+  BehaviorSubject,
+  catchError,
+  EMPTY,
+  lastValueFrom,
+  retry,
+  shareReplay,
+} from 'rxjs';
 
 import { Buffer } from 'buffer';
 
@@ -19,9 +26,9 @@ export class MyServiceService {
 
       let fileReader = new FileReader();
 
-      fileReader.readAsArrayBuffer(file); // Lê o arquivo usando a API fileReader HTML5 (como um ArrayBuffer)
+      fileReader.readAsArrayBuffer(file);
       fileReader.onload = async (event: any) => {
-        const chunks = await this._chunk(event.target.result, 83886);
+        const chunks = await this._chunk(event.target.result, 8388608); // 8MB
         const idGUID = this._generateGUID();
 
         // console.log('CHUNKS', chunks);
@@ -66,6 +73,7 @@ export class MyServiceService {
 
       while (buf.length) {
         let i = buf.lastIndexOf(32, maxBytes + 1);
+
         if (i < 0) i = buf.indexOf(32, maxBytes); // Se nenhum espaço for encontrado, tente a busca direta
         if (i < 0) i = buf.length; // Se não houver espaço algum, pegue a string inteira
 
@@ -77,20 +85,28 @@ export class MyServiceService {
     });
   }
 
-  private async _executePost(url: string, data: any, requestHeaders: any) {
-    return lastValueFrom(this.http.post(url, data, requestHeaders));
+  private async _executePost(url: string, data: any, httpOptions: any) {
+    return lastValueFrom(
+      this.http.post(url, data, httpOptions).pipe(
+        retry(3),
+        catchError(() => EMPTY),
+        shareReplay()
+      )
+    );
   }
 
   private _uploadFileChunk(data: any) {
     return new Promise((resolve, reject) => {
       const endpoint = 'https://httpbin.org/post';
 
-      const headers = {
-        Accept: 'application/json',
-        'Content-Type': 'multipart/form-data',
-      };
+      // const httpOptions = {
+      //   Accept: 'application/json',
+      //   'Content-Type': 'multipart/form-data',
+      // };
 
-      this._executePost(endpoint, data, headers)
+      const httpOptions = { 'Content-Type': 'application/json' };
+
+      this._executePost(endpoint, data, httpOptions)
         .then((offset) => resolve(offset))
         .catch((err) => reject(err));
     });

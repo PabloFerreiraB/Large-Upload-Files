@@ -28,10 +28,10 @@ export class MyServiceService {
 
       fileReader.readAsArrayBuffer(file);
       fileReader.onload = async (event: any) => {
-        const chunks = await this._chunk(event.target.result, 8388608); // 8MB
-        const idGUID = this._generateGUID();
+        const maxBytes = 8388608;
+        const chunks = await this._chunk(event.target.result, maxBytes); // 8MB
 
-        // console.log('CHUNKS', chunks);
+        const idGUID = this._generateGUID();
 
         this._uploadFile(idGUID, fileName, chunks, resolve, reject);
       };
@@ -69,6 +69,7 @@ export class MyServiceService {
   private _chunk(s: string, maxBytes: number): Promise<any[]> {
     return new Promise((resolve) => {
       let buf = Buffer.from(s);
+
       const result = [];
 
       while (buf.length) {
@@ -98,11 +99,6 @@ export class MyServiceService {
   private _uploadFileChunk(data: any) {
     return new Promise((resolve, reject) => {
       const endpoint = 'https://httpbin.org/post';
-
-      // const httpOptions = {
-      //   Accept: 'application/json',
-      //   'Content-Type': 'multipart/form-data',
-      // };
 
       const httpOptions = { 'Content-Type': 'application/json' };
 

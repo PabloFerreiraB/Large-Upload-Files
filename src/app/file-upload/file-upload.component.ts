@@ -31,7 +31,7 @@ export class FileUploadComponent implements OnInit {
 
     if (fileList.length != 0) {
       this._myServiceService
-        .fileUpload(fileList[0], fileList[0].name)
+        .fileUpload(fileList[0])
         .then((res) => {
           this.inputFile!.nativeElement.value = '';
 
